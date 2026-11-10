@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>coop-duel · 双人合作闯关</title>
+  <style>
+    html, body { margin: 0; min-height: 100%; background: #10131a; color: #e8e8e8;
+      font-family: system-ui, "Microsoft YaHei", sans-serif; }
+    #app { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 16px; }
+    canvas { background: #1a1f2b; border-radius: 8px; max-width: 100%; touch-action: none; }
+    #hud { display: flex; gap: 16px; font-size: 14px; opacity: .85; }
+    #hud b { color: #7ee0ff; }
+    #keys { display: flex; gap: 24px; font-size: 13px; opacity: .65; flex-wrap: wrap; justify-content: center; }
+    .p1 { color: #6fb4ff; } .p2 { color: #ffb15e; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="hud">
+      <span>关卡 <b id="hud-level">1</b></span>
+      <span>波次 <b id="hud-wave">1/1</b></span>
+      <span>生命 <b id="hud-hp">3</b></span>
+      <span>分数 <b id="hud-score">0</b></span>
+    </div>
+    <canvas id="game" width="640" height="360"></canvas>
+    <div id="keys">
+      <span class="p1">P1 WASD 移动 · F 射击</span>
+      <span class="p2">P2 方向键 移动 · 空格 射击</span>
+      <span>P 暂停 · R 重开</span>
+    </div>
+  </div>
+  <script src="js/levels.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
