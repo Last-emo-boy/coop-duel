@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "id": 2,
+  "name": "空 hp",
+  "spawn": { "interval": 1000, "speed": 1, "count": 1 },
+  "goal": { "waves": 1 },
+  "waves": [{ "atMs": 0, "hp": null }]
+}

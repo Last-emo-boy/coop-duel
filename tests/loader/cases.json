@@ -1,0 +1,17 @@
+{
+  "cases": [
+    { "name": "good-basic", "mode": "single", "file": "fixtures/good-basic.json", "expect": { "ok": true } },
+    { "name": "missing-hp", "mode": "single", "file": "fixtures/missing-hp.json", "expect": { "ok": false, "path": "waves[0].hp", "code": "bad_value" } },
+    { "name": "type-hp", "mode": "single", "file": "fixtures/type-hp.json", "expect": { "ok": false, "path": "waves[1].hp", "code": "bad_value" } },
+    { "name": "wall-edge-ok", "mode": "single", "file": "fixtures/wall-edge-ok.json", "expect": { "ok": true } },
+    { "name": "wall-overflow", "mode": "single", "file": "fixtures/wall-overflow.json", "expect": { "ok": false, "path": "walls[0].x", "code": "bad_value" } },
+    { "name": "speed-round", "mode": "single", "file": "fixtures/speed-round.json", "expect": { "ok": true, "warningPaths": ["spawn.speed"] } },
+    { "name": "bad-type", "mode": "single", "file": "fixtures/bad-type.json", "expect": { "ok": false, "path": "spawnPoints[0].type", "code": "bad_type" } },
+    { "name": "future-version", "mode": "single", "file": "fixtures/future-version.json", "expect": { "ok": false, "path": "schemaVersion", "code": "unsupported_version" } },
+    { "name": "future-minor-type", "mode": "single", "file": "fixtures/future-minor-type.json", "expect": { "ok": false, "path": "spawnPoints[0].type", "code": "unsupported_version" } },
+    { "name": "not-object", "mode": "single", "file": "fixtures/not-object.json", "expect": { "ok": false, "path": "", "code": "not_object" } },
+    { "name": "duplicate-id", "mode": "batch", "file": "fixtures/duplicate-id.json", "expect": { "ok": false, "code": "duplicate_id" } },
+    { "name": "io-missing", "mode": "io", "file": "fixtures/does-not-exist.json", "expect": { "ok": false, "code": "io_error" } },
+    { "name": "parse-error", "mode": "parse", "file": "fixtures/parse-error.json", "expect": { "ok": false, "code": "parse_error" } }
+  ]
+}

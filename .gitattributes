@@ -1,0 +1,3 @@
+# 这两个文件历史版本用 CRLF；本地 patch 以二进制差异生成，避免 git am 丢 CR 后对不上
+README.md -diff
+index.html -diff

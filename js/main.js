@@ -23,62 +23,53 @@
     score: document.getElementById("hud-score")
   };
 
-  // ---------- 关卡加载：无状态、全量解析，出错返回 {path, code} 不抛异常 ----------
+  // ---------- 关卡加载：委托给无状态 loader，失败项保留 path + code 供选关置灰 ----------
+  var REASONS = {
+    bad_value: "取值不符合要求",
+    bad_type: "未知的敌人类型",
+    not_object: "关卡不是对象",
+    not_array: "关卡列表不是数组",
+    duplicate_id: "关卡 ID 重复",
+    unsupported_version: "关卡版本不受支持",
+    io_error: "读取失败",
+    parse_error: "JSON 解析失败"
+  };
+
   function loadLevels() {
-    var raw = window.LEVELS;
-    var errors = [];
-    var levels = [];
-
-    if (!Array.isArray(raw)) {
-      return { levels: [], errors: [{ path: "LEVELS", code: "NOT_ARRAY" }] };
+    if (window.CoopLoader && typeof window.CoopLoader.validateAll === "function") {
+      return window.CoopLoader.validateAll(window.LEVELS);
     }
-
-    raw.forEach(function (lv, i) {
-      var base = "LEVELS[" + i + "]";
-      if (!lv || typeof lv !== "object") {
-        errors.push({ path: base, code: "NOT_OBJECT" });
-        return;
-      }
-      if (typeof lv.id !== "number") {
-        errors.push({ path: base + ".id", code: "MISSING_OR_NOT_NUMBER" });
-        return;
-      }
-      if (typeof lv.schemaVersion !== "number") {
-        errors.push({ path: base + ".schemaVersion", code: "MISSING" });
-        return;
-      }
-      if (lv.schemaVersion > SUPPORTED_SCHEMA) {
-        errors.push({ path: base + ".schemaVersion", code: "UNSUPPORTED_VERSION" });
-        return;
-      }
-      var spawn = lv.spawn || {};
-      if (typeof spawn.interval !== "number" || spawn.interval <= 0) {
-        errors.push({ path: base + ".spawn.interval", code: "INVALID" });
-        return;
-      }
-      if (typeof spawn.speed !== "number" || spawn.speed <= 0) {
-        errors.push({ path: base + ".spawn.speed", code: "INVALID" });
-        return;
-      }
-      if (typeof spawn.count !== "number" || spawn.count < 0) {
-        errors.push({ path: base + ".spawn.count", code: "INVALID" });
-        return;
-      }
-      var goal = lv.goal || {};
-      if (typeof goal.waves !== "number" || goal.waves <= 0) {
-        errors.push({ path: base + ".goal.waves", code: "INVALID" });
-        return;
-      }
-      levels.push(lv);
-    });
-
-    return { levels: levels, errors: errors };
+    return {
+      ok: false,
+      results: [],
+      levels: [],
+      errors: [{ path: "", code: "bad_value", expected: "CoopLoader", actual: undefined }],
+      warnings: []
+    };
   }
 
   var loaded = loadLevels();
   var LEVELS = loaded.levels;
-  if (loaded.errors.length) {
-    console.warn("[coop-duel] 关卡加载失败，已跳过：", loaded.errors);
+  var LEVEL_VIEWS = Array.isArray(window.LEVELS) ? window.LEVELS.map(function (raw, i) {
+    var result = loaded.results[i] || { ok: false, code: "bad_value", errors: [{ path: "", code: "bad_value" }] };
+    var error = (result.errors && result.errors[0]) || {};
+    return {
+      raw: raw,
+      index: i,
+      name: raw && typeof raw === "object" && typeof raw.name === "string" ? raw.name : "关卡 " + (i + 1),
+      valid: !!result.ok,
+      validIndex: -1,
+      reason: REASONS[result.code] || "加载失败",
+      path: error.path === undefined ? "" : error.path,
+      code: result.code || error.code || "bad_value"
+    };
+  }) : [];
+  var validCount = 0;
+  LEVEL_VIEWS.forEach(function (view) {
+    if (view.valid) view.validIndex = validCount++;
+  });
+  if (loaded.errors && loaded.errors.length) {
+    console.warn("[coop-duel] 关卡加载失败，已置灰：", loaded.errors);
   }
 
   function difficultyAt(i) {
@@ -111,9 +102,36 @@
       batch: 0,
       spawnTimer: 0,
       toast: "",
-      toastT: 0
+      toastT: 0,
+      selectIndex: 0
     };
     prepareLevel();
+  }
+
+  function openSelect() {
+    state.mode = "select";
+    var first = -1;
+    for (var i = 0; i < LEVEL_VIEWS.length; i++) {
+      if (LEVEL_VIEWS[i].valid) { first = i; break; }
+    }
+    state.selectIndex = first >= 0 ? first : 0;
+    state.toast = "";
+    state.toastT = 0;
+  }
+
+  function moveSelect(delta) {
+    if (!LEVEL_VIEWS.length) return;
+    state.selectIndex = (state.selectIndex + delta + LEVEL_VIEWS.length) % LEVEL_VIEWS.length;
+  }
+
+  function startSelected() {
+    var view = LEVEL_VIEWS[state.selectIndex];
+    if (!view) return;
+    if (!view.valid || view.validIndex < 0) {
+      setToast(view.reason + "：" + (view.path || "level") + " · " + view.code);
+      return;
+    }
+    resetRun(view.validIndex);
   }
 
   var level = null;
@@ -154,12 +172,20 @@
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].indexOf(e.key) >= 0) e.preventDefault();
     if (!keys[k]) keys[k] = true;
 
+    if (state.mode === "select") {
+      if (k === "ArrowUp" || k === "w") moveSelect(-1);
+      if (k === "ArrowDown" || k === "s") moveSelect(1);
+      if (k === "enter" || k === " ") startSelected();
+      if (k === "r") openSelect();
+      return;
+    }
+
     if (k === "p" && (state.mode === "play" || state.mode === "paused")) {
       state.mode = state.mode === "play" ? "paused" : "play";
     }
     if (k === "r") resetRun(state.levelIndex);
-    if (k === "enter" && state.mode === "over") resetRun(0);
-    if (k === "enter" && state.mode === "clear") resetRun(0);
+    if (k === "l" || k === "Escape") openSelect();
+    if (k === "enter" && (state.mode === "over" || state.mode === "clear" || state.mode === "no-levels")) openSelect();
   });
 
   window.addEventListener("keyup", function (e) {
@@ -416,7 +442,83 @@
     ctx.restore();
   }
 
+  function drawSelect() {
+    drawGrid();
+    ctx.save();
+    ctx.fillStyle = "rgba(10,13,20,0.6)";
+    ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#7ee0ff";
+    ctx.font = "600 22px system-ui, sans-serif";
+    ctx.fillText("选择关卡", 40, 46);
+    ctx.font = "12px system-ui, sans-serif";
+    ctx.fillStyle = "rgba(232,232,232,0.6)";
+    ctx.fillText("↑↓ 选择 · Enter 开始 · 灰色关卡不可用", 40, 66);
+
+    var rowH = LEVEL_VIEWS.length > 6 ? 34 : 48;
+    var top = 92;
+    LEVEL_VIEWS.forEach(function (view, i) {
+      var y = top + i * rowH;
+      var selected = i === state.selectIndex;
+      if (selected) {
+        ctx.fillStyle = "rgba(126,224,255,0.12)";
+        ctx.fillRect(32, y - 18, W - 64, rowH - 6);
+      }
+      ctx.fillStyle = view.valid ? "#e8e8e8" : "rgba(232,232,232,0.38)";
+      ctx.font = "600 16px system-ui, sans-serif";
+      var label = view.valid ? view.name : view.name + "：" + view.reason;
+      ctx.fillText((selected ? "▶ " : "   ") + label, 44, y);
+      if (!view.valid) {
+        ctx.fillStyle = "rgba(255,177,94,0.6)";
+        ctx.font = "11px system-ui, sans-serif";
+        ctx.fillText((view.path || "level") + " · " + view.code, 62, y + 15);
+      } else {
+        ctx.fillStyle = "rgba(232,232,232,0.35)";
+        ctx.font = "11px system-ui, sans-serif";
+        ctx.fillText("第 " + (view.validIndex + 1) + " 关", W - 92, y);
+      }
+    });
+
+    if (!LEVEL_VIEWS.length) {
+      ctx.fillStyle = "#ffb15e";
+      ctx.font = "600 16px system-ui, sans-serif";
+      ctx.fillText("没有可用关卡", 44, top);
+      if (loaded.errors && loaded.errors.length) {
+        ctx.font = "12px system-ui, sans-serif";
+        ctx.fillText("level · " + loaded.errors[0].code, 44, top + 22);
+      }
+    }
+
+    if (state.toastT > 0) {
+      ctx.globalAlpha = Math.min(1, state.toastT);
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#ffb15e";
+      ctx.font = "600 14px system-ui, sans-serif";
+      ctx.fillText(state.toast, W / 2, H - 24);
+    }
+    ctx.restore();
+  }
+
+  function runtimeError(error) {
+    var info = {
+      levelId: level && level.id,
+      schemaVersion: level && level.schemaVersion,
+      path: "runtime",
+      code: "runtime_error",
+      message: String((error && error.message) || error)
+    };
+    console.error("[coop-duel] 运行期错误，退回选关：", info);
+    if (state) {
+      openSelect();
+      setToast("运行期错误，已退回选关");
+    }
+  }
+
   function draw() {
+    if (state.mode === "select") {
+      drawSelect();
+      return;
+    }
     drawGrid();
 
     state.sparks.forEach(function (sp) {
@@ -453,6 +555,13 @@
 
   function syncHud() {
     if (!state) return;
+    if (state.mode === "select") {
+      hud.level.textContent = "-";
+      hud.wave.textContent = "-";
+      hud.hp.textContent = "-";
+      hud.score.textContent = "0";
+      return;
+    }
     hud.level.textContent = Math.min(state.levelIndex + 1, LEVELS.length || 1);
     var waves = level && level.goal ? level.goal.waves : 0;
     hud.wave.textContent = (Math.min(state.wave + 1, waves || 1)) + "/" + (waves || 1);
@@ -465,23 +574,32 @@
     var dt = Math.min((ts - state.last) / 1000, 0.05);
     state.last = ts;
 
-    if (state.mode === "play") {
-      state.t += dt;
-      updateWorld(dt);
+    try {
+      if (state.mode === "play") {
+        state.t += dt;
+        updateWorld(dt);
+      }
+      draw();
+      syncHud();
+    } catch (error) {
+      runtimeError(error);
     }
-    draw();
-    syncHud();
     requestAnimationFrame(frame);
   }
 
   resetRun(0);
+  openSelect();
   requestAnimationFrame(frame);
 
   // 供调试/自检使用
   window.__coop = {
     loadLevels: loadLevels,
+    openSelect: openSelect,
+    startSelected: startSelected,
+    moveSelect: moveSelect,
     getState: function () { return state; },
     getLevels: function () { return LEVELS; },
+    getViews: function () { return LEVEL_VIEWS; },
     errors: loaded.errors
   };
 })();

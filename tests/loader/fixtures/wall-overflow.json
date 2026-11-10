@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": 5,
+  "name": "墙越界",
+  "spawn": { "interval": 1000, "speed": 1, "count": 1 },
+  "goal": { "waves": 1 },
+  "arena": { "w": 100, "h": 50 },
+  "walls": [{ "x": 51, "y": 0, "w": 50, "h": 10 }]
+}
